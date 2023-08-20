@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Strava activity</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#fc5200",
+              primaryDark: "#eb5002",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Courier New", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      style="
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      "
+    >
+      <button
+        class="bg-primary hover:bg-primaryDark hover:drop-shadow rounded p-2 text-white"
+        id="strava-login-btn"
+        type="button"
+        onclick="
+        location.href='https://www.strava.com/oauth/authorize?client_id=112422&response_type=code&redirect_uri=http://localhost:8000&approval_prompt=force&scope=activity:read_all'
+        "
+      >
+        Login with Strava
+      </button>
+      <div
+        id="loading"
+        class="animate-pulse text-primary"
+        style="display: none"
+      >
+        <p>Creating graph...</p>
+      </div>
+    </div>
+  </body>
+  <script>
+    function showLoading() {
+      document.getElementById("loading").style.display = "block";
+    }
+    function hideLoading() {
+      document.getElementById("loading").style.display = "none";
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const stravaToken = urlParams.get("code");
+    if (stravaToken) {
+      document.getElementById("strava-login-btn").style.display = "none";
+      showLoading();
+    }
+
+    // Your JavaScript code goes here
+  </script>
+</html>
