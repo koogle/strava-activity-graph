@@ -59,12 +59,99 @@
     function hideLoading() {
       document.getElementById("loading").style.display = "none";
     }
-    const urlParams = new URLSearchParams(window.location.search);
-    const stravaToken = urlParams.get("code");
-    if (stravaToken) {
+
+    async function loadDataByDay(token) {
+      let page = 1;
+      let activities = [];
+      let hasNextPage = true;
+      let activitiesByDay = {};
+
+      while (hasNextPage) {
+        const response = await fetch(
+          `https://www.strava.com/api/v3/athlete/activities?access_token=${token}&page=${page}&per_page=200`
+        );
+        const data = await response.json();
+
+        if (data.length) {
+          activities = activities.concat(data);
+          data.forEach((activity) => {
+            if (activity.type !== "Run") {
+              return;
+            }
+
+            const activityDate = new Date(activity.start_date_local);
+            const offset = yourDate.getTimezoneOffset();
+            activityDate = new Date(
+              activityDate.getTime() - offset * 60 * 1000
+            );
+            const formattedDate = activityDate.toISOString().split("T")[0];
+
+            if (!activitiesByDay[activityDate]) {
+              activitiesByDay[activityDate] = 0;
+            }
+            activitiesByDay[activityDate] += activity.distance;
+          });
+          page++;
+        } else {
+          hasNextPage = false;
+        }
+      }
+
+      return activitiesByDay;
+    }
+
+    async function createVisualization(token) {
+      const dataByDay = await loadDataByDay(token);
+    }
+
+    async function getToken(stravaToken) {
+      try {
+        const response = await fetch("https://www.strava.com/oauth/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            client_id: "112422",
+            client_secret: "e714a2cb9ad38cd50cd7e31048b3c4f2acf17c05",
+            code: stravaToken,
+            grant_type: "authorization_code",
+          }),
+        });
+        const data = await response.json();
+
+        return data.access_token;
+      } catch (error) {
+        console.error(error);
+        alert("Error getting token", error);
+        return null;
+      }
+    }
+
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const stravaToken = urlParams.get("code");
+      if (!stravaToken) {
+        return;
+      }
       document.getElementById("strava-login-btn").style.display = "none";
       showLoading();
+      try {
+        const token = "34044f448a77c092cc251ba12786410cba793347"; // await getToken(stravaToken);
+        if (!token) {
+          console.error("Token invalid refreshing");
+          window.history.replaceState({}, document.title, "/");
+        }
+        await createVisualization(token);
+      } catch (error) {
+        console.error(error);
+        alert("Error creating graph", error);
+      } finally {
+        hideLoading();
+      }
     }
+
+    init();
 
     // Your JavaScript code goes here
   </script>
