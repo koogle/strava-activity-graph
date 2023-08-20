@@ -6,6 +6,51 @@
     <title>Strava activity</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-calendar-graph-day-bg: #ebedf0;
+        --color-calendar-graph-day-border: rgba(255, 255, 255, 0.05);
+        --color-level-1: #faba9a;
+        --color-level-2: #fc9460;
+        --color-level-3: #fd712a;
+        --color-level-4: #fc5200;
+      }
+      .graph-day {
+        padding: 2px;
+        fill: var(--color-calendar-graph-day-bg);
+        shape-rendering: geometricPrecision;
+        background-color: var(--color-calendar-graph-day-bg);
+        border-radius: 2px;
+        outline: 1px solid var(--color-calendar-graph-day-border);
+        outline-offset: -1px;
+      }
+      .graph-day[data-count="1"] {
+        background-color: var(--color-level-1);
+        fill: var(--color-level-1);
+        outline: 1px solid var(--color-calendar-graph-day-border);
+      }
+      .graph-day[data-count="2"] {
+        background-color: var(--color-level-2);
+        fill: var(--color-level-2);
+        outline: 1px solid var(--color-calendar-graph-day-border);
+      }
+      .graph-day[data-count="3"] {
+        background-color: var(--color-level-3);
+        fill: var(--color-level-3);
+        outline: 1px solid var(--color-calendar-graph-day-border);
+      }
+      .graph-day[data-count="4"] {
+        background-color: var(--color-level-4);
+        fill: var(--color-level-4);
+        outline: 1px solid var(--color-calendar-graph-day-border);
+      }
+      .table-auto {
+        border-spacing: 3px;
+        border-collapse: separate;
+        overflow: scroll;
+        /*background-color: #ebedf0c7;*/
+      }
+    </style>
     <script>
       tailwind.config = {
         theme: {
@@ -50,6 +95,7 @@
       >
         <p>Creating graph...</p>
       </div>
+      <table class="table-auto" style="display: none" id="graph"></table>
     </div>
   </body>
   <script>
@@ -60,11 +106,18 @@
       document.getElementById("loading").style.display = "none";
     }
 
+    function formatDate(activityDate) {
+      const offset = activityDate.getTimezoneOffset();
+      activityDate = new Date(activityDate.getTime() - offset * 60 * 1000);
+      return activityDate.toISOString().split("T")[0];
+    }
+
     async function loadDataByDay(token) {
       let page = 1;
       let activities = [];
       let hasNextPage = true;
       let activitiesByDay = {};
+      let maxDistance = -1;
 
       while (hasNextPage) {
         const response = await fetch(
@@ -78,18 +131,15 @@
             if (activity.type !== "Run") {
               return;
             }
-
-            const activityDate = new Date(activity.start_date_local);
-            const offset = yourDate.getTimezoneOffset();
-            activityDate = new Date(
-              activityDate.getTime() - offset * 60 * 1000
+            const formattedDate = formatDate(
+              new Date(activity.start_date_local)
             );
-            const formattedDate = activityDate.toISOString().split("T")[0];
 
-            if (!activitiesByDay[activityDate]) {
-              activitiesByDay[activityDate] = 0;
+            if (!activitiesByDay[formattedDate]) {
+              activitiesByDay[formattedDate] = 0;
             }
-            activitiesByDay[activityDate] += activity.distance;
+            activitiesByDay[formattedDate] += activity.distance;
+            maxDistance = Math.max(maxDistance, activity.distance);
           });
           page++;
         } else {
@@ -97,11 +147,101 @@
         }
       }
 
-      return activitiesByDay;
+      return [activitiesByDay, maxDistance];
     }
 
     async function createVisualization(token) {
-      const dataByDay = await loadDataByDay(token);
+      const [dataByDay, maxDistance] = await loadDataByDay(token);
+
+      const table = document.getElementById("graph");
+      table.style.borderSpacing = "3px";
+      table.style.display = "block";
+      const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const today = new Date();
+      const lastYear = new Date(
+        today.getFullYear() - 1,
+        today.getMonth(),
+        today.getDate()
+      );
+
+      // Create table header
+      let thead = document.createElement("thead");
+      let tr = document.createElement("tr");
+
+      let previousMonth = null;
+      const pastWeeks = 52;
+      let colspan = 0;
+      let th = null;
+      for (let i = 0; i <= pastWeeks; i++) {
+        const month = new Date(
+          lastYear.getTime() + i * 7 * 24 * 60 * 60 * 1000
+        ).getMonth();
+        if (month !== previousMonth) {
+          if (th) {
+            th.setAttribute("colspan", colspan);
+          }
+          th = document.createElement("th");
+          th.innerHTML = new Intl.DateTimeFormat("en-US", {
+            month: "short",
+          }).format(new Date(lastYear.getTime() + i * 7 * 24 * 60 * 60 * 1000));
+          tr.appendChild(th);
+          previousMonth = month;
+          colspan = 0;
+        }
+        colspan++;
+      }
+      if (th) {
+        th.setAttribute("colspan", colspan);
+      }
+      tr.appendChild(th);
+      thead.appendChild(tr);
+      table.appendChild(thead);
+
+      // Create table body
+      let tbody = document.createElement("tbody");
+      for (let i = 0; i < 7; i++) {
+        let tr = document.createElement("tr");
+        tr.height = "10px";
+
+        for (let j = 0; j <= 52; j++) {
+          let td = document.createElement("td");
+          if (j === 0) {
+          } else {
+            const date = new Date(
+              lastYear.getTime() + ((j - 1) * 7 + i) * 24 * 60 * 60 * 1000
+            );
+            let formattedDate = formatDate(date);
+            td.width = "10px";
+            td.height = "10px";
+
+            let distanceTravelled = dataByDay[formattedDate] || 0;
+            let distanceCategory;
+            if (distanceTravelled === 0) {
+              distanceCategory = "0";
+            } else if (distanceTravelled <= maxDistance * 0.0625) {
+              distanceCategory = "1";
+            } else if (distanceTravelled <= maxDistance * 0.25) {
+              distanceCategory = "2";
+            } else if (distanceTravelled <= maxDistance * 0.5) {
+              distanceCategory = "3";
+            } else {
+              distanceCategory = "4";
+            }
+            td.setAttribute("data-count", distanceCategory);
+
+            td.title =
+              distanceTravelled > 0
+                ? `${formattedDate} - ${(distanceTravelled / 1000).toFixed(
+                    2
+                  )} km`
+                : `${formattedDate}`;
+            td.classList.add("graph-day");
+          }
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
     }
 
     async function getToken(stravaToken) {
